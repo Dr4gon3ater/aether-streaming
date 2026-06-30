@@ -1,0 +1,55 @@
+{
+  "name": "aether-streaming",
+  "productName": "Aether Streaming",
+  "version": "1.1.9",
+  "description": "Netflix-Style IPTV Web App",
+  "main": "main.js",
+  "author": "Antigravity",
+  "license": "ISC",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "pack": "electron-builder --dir",
+    "publish": "electron-builder --win -p always"
+  },
+  "build": {
+    "appId": "com.antigravity.aetherstreaming",
+    "productName": "Aether Streaming",
+    "directories": {
+      "output": "dist"
+    },
+    "asarUnpack": [
+      "bin/**/*"
+    ],
+    "releaseInfo": {
+      "releaseNotesFile": "release-notes.md"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/logo.ico",
+      "publish": [
+        {
+          "provider": "github",
+          "owner": "Dr4gon3ater",
+          "repo": "aether-streaming",
+          "releaseType": "release"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Aether Streaming"
+    }
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.1.8"
+  }
+}

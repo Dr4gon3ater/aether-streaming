@@ -1,0 +1,7 @@
+node_modules/
+dist/
+bin/
+github_token.txt
+*.log
+do_publish.ps1
+.env

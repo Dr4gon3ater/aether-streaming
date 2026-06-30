@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aether Streaming</title>
+  
+  <!-- PWA Setup -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#141414">
+  <link rel="apple-touch-icon" href="assets/logo.jpg">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Aether">
+  
+  <style>
+    #debug-log {
+      position: fixed; top: 0; left: 0; right: 0; height: 150px;
+      background: rgba(0,0,0,0.9); color: #0f0; font-family: monospace;
+      font-size: 12px; overflow-y: scroll; z-index: 99999; padding: 10px;
+      display: none; pointer-events: none;
+    }
+  </style>
+  <script>
+    window.addEventListener('error', function(e) {
+      const dbg = document.getElementById('debug-log');
+      if (dbg) { dbg.style.display = 'block'; dbg.innerHTML += '[ERROR] ' + e.message + '<br>' + (e.error ? e.error.stack : '') + '<br><br>'; }
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      const dbg = document.getElementById('debug-log');
+      if (dbg) { dbg.style.display = 'block'; dbg.innerHTML += '[PROMISE] ' + (e.reason && e.reason.stack ? e.reason.stack : e.reason) + '<br><br>'; }
+    });
+  </script>
+
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Font (Inter & Outfit) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  
+  <!-- Style Sheet -->
+  <link rel="stylesheet" href="css/style.css">
+  
+  <!-- Hls.js library for playing m3u8 streams -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
+</head>
+<body>
+
+  <!-- App Wrapper -->
+  <div class="app-wrapper">
+    
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <img src="assets/logo.jpg" alt="Aether" class="app-logo-img">
+        <span class="logo-main" style="margin-left: 10px; font-weight: 800; letter-spacing: 2px;">AETHER</span>
+      </div>
+
+      <!-- Active Profile Indicator (click to switch profile) -->
+      <div id="sidebar-profile-indicator" class="sidebar-profile-indicator">
+        <div class="sidebar-profile-avatar avatar-red">?</div>
+        <span>Kein Profil</span>
+      </div>
+
+      <!-- Subscription Expiration Badge -->
+      <div id="sidebar-expiry-badge" class="sidebar-expiry-badge hidden">
+        <!-- Filled dynamically -->
+      </div>
+      
+      <nav class="sidebar-nav">
+        <div class="sidebar-nav-item active" data-tab="home">
+          <i class="fas fa-house"></i> <span data-i18n="navHome">Home</span>
+        </div>
+        <div class="sidebar-nav-item" data-tab="explore">
+          <i class="fas fa-compass"></i> <span data-i18n="navExplore">Entdecken</span>
+        </div>
+        <div class="sidebar-nav-item" data-tab="live">
+          <i class="fas fa-tv"></i> <span data-i18n="navLive">Live TV</span>
+        </div>
+        <div class="sidebar-nav-item" data-tab="movies">
+          <i class="fas fa-film"></i> <span data-i18n="navMovies">Filme</span>
+        </div>
+        <div class="sidebar-nav-item" data-tab="series">
+          <i class="fas fa-clapperboard"></i> <span data-i18n="navSeries">Serien</span>
+        </div>
+        <div class="sidebar-nav-item" data-tab="favorites">
+          <i class="fas fa-heart"></i> <span>Favoriten</span>
+        </div>
+        <div class="sidebar-nav-item" data-tab="downloads">
+          <i class="fas fa-download"></i> <span data-i18n="navDownloads">Downloads</span>
+        </div>
+        <div class="sidebar-nav-item" data-tab="settings">
+          <i class="fas fa-sliders"></i> <span data-i18n="navSettings">Einstellungen</span>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="main-wrapper" style="flex: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; position: relative;">
+      
+      <!-- Global Top Bar -->
+      <header class="global-topbar" style="height: 70px; display: flex; align-items: center; justify-content: flex-end; padding: 0 40px; background: linear-gradient(to bottom, rgba(10,10,10,0.9) 0%, transparent 100%); position: absolute; top: 0; left: 0; right: 0; z-index: 100; pointer-events: none;">
+        <div class="search-container" style="position: relative; pointer-events: auto;">
+          <i class="fas fa-search" style="position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: #aaa;"></i>
+          <input type="text" id="global-search-input" data-i18n="searchPlaceholder" placeholder="Filme, Serien, Sender suchen..." style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 10px 15px 10px 40px; border-radius: 30px; width: 300px; font-size: 14px; outline: none; transition: all 0.3s ease; backdrop-filter: blur(10px);">
+        </div>
+      </header>
+
+      <main class="main-content" id="main-content" style="flex: 1; overflow-y: auto; overflow-x: hidden;">
+        <!-- Pages rendered dynamically here -->
+      </main>
+
+      <!-- Smart Live-Search Overlay -->
+      <div id="global-search-overlay" class="search-overlay hidden">
+        <div class="search-overlay-content">
+          <div class="search-results-section" id="search-results-live" style="display:none;">
+            <h3 data-i18n="navLive">Live TV</h3>
+            <div class="explore-grid" id="search-grid-live"></div>
+          </div>
+          <div class="search-results-section" id="search-results-movies" style="display:none;">
+            <h3 data-i18n="navMovies">Filme</h3>
+            <div class="explore-grid" id="search-grid-movies"></div>
+          </div>
+          <div class="search-results-section" id="search-results-series" style="display:none;">
+            <h3 data-i18n="navSeries">Serien</h3>
+            <div class="explore-grid" id="search-grid-series"></div>
+          </div>
+          <div id="search-no-results" class="hidden" style="text-align: center; margin-top: 100px; color: #888;">
+            <i class="fas fa-search" style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;"></i>
+            <h2 data-i18n="noResults">Keine Ergebnisse gefunden</h2>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Detail Information Modal (Netflix overlay style) -->
+  <div id="netflix-detail-modal" class="detail-modal hidden">
+    <div id="modal-dynamic-bg" class="modal-dynamic-bg"></div>
+    <div class="modal-content">
+      <div id="modal-inner-content">
+        <!-- Filled dynamically by ui.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Trailer Modal Overlay -->
+  <div id="trailer-modal" class="detail-modal hidden" style="z-index: 10000; align-items: center; justify-content: center; background: rgba(0,0,0,0.9);">
+    <div class="modal-content" style="width: 80%; max-width: 1000px; background: transparent; padding: 0;">
+      <button class="modal-close-btn" id="trailer-close-btn" style="position: absolute; top: -40px; right: 0; background: none; font-size: 30px; border: none; cursor: pointer; color: white;">
+        <i class="fas fa-times"></i>
+      </button>
+      <div id="trailer-video-container" style="position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); background: black;">
+        <!-- iframe injected here -->
+      </div>
+      <div style="text-align: center; margin-top: 20px;">
+        <button id="trailer-external-btn" class="btn-play" style="background: var(--color-primary); color: white; border: none; cursor: pointer; padding: 10px 20px; border-radius: 5px; font-weight: bold; transition: background 0.3s;"><i class="fas fa-external-link-alt"></i> Trailer im Browser öffnen (bei Abspielfehlern)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fullscreen Media Player Container -->
+  <div id="netflix-player-container" class="player-container hidden">
+    <video id="netflix-video" playsinline></video>
+    
+    <!-- Custom Video Player Controls Overlay -->
+    <div class="player-controls-overlay">
+      
+      <!-- PiP Overlay Controls (Only visible in PiP mode) -->
+      <button id="player-pip-maximize-btn" class="player-pip-maximize-btn" title="Groß machen"><i class="fas fa-expand"></i></button>
+      <button id="player-pip-close-btn" class="player-pip-close-btn" title="Schließen"><i class="fas fa-times"></i></button>
+
+      <!-- Top controls (Back + Title) -->
+      <div class="player-controls-top">
+        <button id="player-back-btn" class="player-icon-btn"><i class="fas fa-arrow-left"></i></button>
+        <div class="player-metadata">
+          <span id="player-title" class="title">Film Titel</span>
+          <span id="player-subtitle" class="subtitle">S1:E1</span>
+        </div>
+        <div id="player-stream-stats" class="player-stream-stats"></div>
+      </div>
+
+      <!-- Playback Loading Spinner / Error message inside video frame -->
+        <div class="player-overlay-center">
+          <div class="player-spinner"><i class="fas fa-circle-notch fa-spin"></i></div>
+          <div id="player-error-text" class="player-error-message"></div>
+        </div>
+
+      <!-- Autoplay Next Episode Countdown Overlay -->
+      <div id="player-autoplay-overlay" class="hidden" style="position: absolute; bottom: 100px; right: 40px; background: rgba(0,0,0,0.85); border: 1px solid rgba(255,255,255,0.2); padding: 15px 20px; border-radius: 8px; display: flex; align-items: center; gap: 20px; z-index: 50; backdrop-filter: blur(10px);">
+        <div style="flex: 1;">
+          <div style="font-size: 13px; color: #ccc; margin-bottom: 5px;">Nächste Folge in <span id="player-autoplay-countdown" style="color: white; font-weight: bold;">15</span>s</div>
+          <div id="player-autoplay-title" style="font-weight: 600; font-size: 15px; max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Titel der Folge</div>
+        </div>
+        <button id="player-autoplay-btn" class="player-icon-btn" style="background: white; color: black; border-radius: 50%; width: 45px; height: 45px; padding: 0; display: flex; align-items: center; justify-content: center;"><i class="fas fa-play" style="margin-left: 3px;"></i></button>
+      </div>
+
+      <!-- Bottom controls wrapper -->
+      <div class="player-controls-bottom">
+        
+        <!-- Progress scrubber bar -->
+        <div class="player-scrub-container">
+          <input type="range" id="player-progress-bar" min="0" max="100" value="0" step="0.1">
+          <div id="player-progress-fill" class="progress-fill"></div>
+        </div>
+
+        <div class="player-controls-row">
+          
+          <!-- Left side controls -->
+          <div class="player-controls-left">
+            <div class="player-volume-container">
+              <button id="player-volume-btn" class="player-control-btn"><i class="fas fa-volume-high"></i></button>
+              <input type="range" id="player-volume-slider" min="0" max="1" step="0.05" value="0.8">
+            </div>
+
+            <div class="player-time-display">
+              <span id="player-time-current">00:00</span>
+              <span class="time-separator">/</span>
+              <span id="player-time-total">00:00</span>
+            </div>
+          </div>
+
+          <!-- Center controls (Playback) -->
+          <div class="player-controls-center">
+            <button id="player-prev-ep" class="player-control-btn player-big-btn" title="Vorherige Folge" style="display:none;"><i class="fas fa-step-backward"></i></button>
+            <button id="player-skip-back" class="player-control-btn player-big-btn" title="10s zurück"><i class="fas fa-rotate-left"></i></button>
+            <button id="player-play-btn" class="player-control-btn player-huge-btn"><i class="fas fa-play"></i></button>
+            <button id="player-skip-fwd" class="player-control-btn player-big-btn" title="10s vorwärts"><i class="fas fa-rotate-right"></i></button>
+            <button id="player-next-ep" class="player-control-btn player-big-btn" title="Nächste Folge" style="display:none;"><i class="fas fa-step-forward"></i></button>
+          </div>
+
+          <!-- Right side controls -->
+          <div class="player-controls-right">
+            <button id="player-speed-btn" class="player-control-btn" title="Geschwindigkeit"><i class="fas fa-gauge-simple-high"></i> 1x</button>
+            
+            <!-- Audio Spuren Menu -->
+            <div class="player-dropdown-wrapper">
+              <button id="player-audio-btn" class="player-control-btn" title="Tonspur"><i class="fas fa-volume-up"></i></button>
+              <div id="player-audio-menu" class="player-menu-dropdown"></div>
+            </div>
+
+            <!-- Untertitel Menu -->
+            <div class="player-dropdown-wrapper">
+              <button id="player-subtitle-btn" class="player-control-btn" title="Untertitel"><i class="fas fa-closed-captioning"></i></button>
+              <div id="player-subtitle-menu" class="player-menu-dropdown"></div>
+            </div>
+
+              <button id="player-pip-btn" class="player-control-btn" title="Bild-in-Bild"><i class="fas fa-images"></i></button>
+              <button id="player-fullscreen-btn" class="player-control-btn" title="Vollbild"><i class="fas fa-expand"></i></button>
+          </div>
+
+        </div>
+        
+        <!-- Skip Intro Overlay -->
+        <div id="player-skip-intro-container" class="skip-intro-container" style="display: none;">
+          <button id="player-skip-intro-btn" class="skip-intro-btn">
+            <i class="fas fa-forward-step"></i> Intro überspringen
+          </button>
+          <button id="player-skip-intro-settings-btn" class="skip-intro-settings-btn" title="Intro Länge für diese Serie einstellen">
+            <i class="fas fa-gear"></i>
+          </button>
+        </div>
+        </div>
+        
+        <!-- Schaust du noch? (Anti-Binge) Overlay -->
+        <div id="player-anti-binge-overlay" class="player-overlay-message" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: white;">
+          <h2 style="font-size: 32px; margin-bottom: 20px;">Schaust du noch?</h2>
+          <p style="font-size: 16px; color: #ccc; margin-bottom: 30px;">(Tipp: Du kannst diese Abfrage in den Einstellungen unter 'Allgemein' deaktivieren)</p>
+          <div style="display: flex; gap: 20px;">
+            <button id="anti-binge-continue-btn" style="background: var(--color-primary); color: white; border: none; padding: 12px 30px; font-size: 18px; font-weight: bold; border-radius: 4px; cursor: pointer;">Ja, weiter schauen</button>
+            <button id="anti-binge-close-btn" style="background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); padding: 12px 30px; font-size: 18px; font-weight: bold; border-radius: 4px; cursor: pointer;">Beenden</button>
+          </div>
+        </div>
+        
+      </div>
+        <!-- FFmpeg Download UI (Only shown once) -->
+        <div id="player-ffmpeg-download" class="player-overlay-message" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: white;">
+          <h3 style="margin-bottom: 15px; font-size: 24px;">Erste Einrichtung...</h3>
+          <p style="margin-bottom: 25px; max-width: 500px; line-height: 1.5; color: #ccc;">Um Filme und Serien mit bestem Ton abzuspielen, wird einmalig ein winziger Audio-Konverter heruntergeladen.</p>
+          <div style="width: 300px; height: 10px; background: #333; border-radius: 5px; overflow: hidden; margin-bottom: 10px;">
+            <div id="ffmpeg-progress-bar" style="width: 0%; height: 100%; background: var(--color-primary); transition: width 0.3s;"></div>
+          </div>
+          <p id="ffmpeg-progress-text" style="font-size: 14px; color: #999;">Starte Download...</p>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Cloud Login Overlay -->
+  <div id="cloud-login-overlay" class="profile-overlay hidden">
+    <div class="profile-selection-box" style="max-width: 400px;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <i class="fas fa-cloud" style="font-size: 40px; color: var(--color-primary); margin-bottom: 10px;"></i>
+        <h1>Cloud Login</h1>
+        <p style="color: var(--color-text-muted); font-size: 14px;">Melde dich an, um deine Profile und Favoriten geräteübergreifend zu synchronisieren.</p>
+      </div>
+      <div class="login-form-group">
+        <label>E-Mail Adresse</label>
+        <input type="email" id="cloud-email" placeholder="name@beispiel.de" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; margin-bottom: 15px;">
+      </div>
+      <div class="login-form-group">
+        <label>Passwort</label>
+        <input type="password" id="cloud-password" placeholder="Min. 6 Zeichen" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; margin-bottom: 20px;">
+      </div>
+      <div id="cloud-login-error" style="color: #ff4b4b; font-size: 13px; margin-bottom: 15px; display: none;">Fehler beim Login.</div>
+      <button id="btn-cloud-login" class="btn-login-submit" style="width: 100%; margin-bottom: 10px;">Einloggen</button>
+      <button id="btn-cloud-register" class="btn-login-submit" style="width: 100%; margin-bottom: 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);">Neu registrieren</button>
+      <div style="text-align: center; margin-top: 15px;">
+        <a href="#" id="btn-cloud-skip" style="color: var(--color-text-muted); font-size: 13px; text-decoration: underline;">Ohne Cloud Sync lokal fortfahren</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="profile-overlay" class="profile-overlay hidden">
+    <div class="profile-selection-box">
+      <h1 data-i18n="profileTitle">Wer schaut gerade?</h1>
+      <div id="profiles-grid" class="profiles-grid">
+        <!-- Dynamically filled with profiles + "Add Profile" card -->
+      </div>
+      <button id="manage-profiles-btn" class="btn-manage-profiles" data-i18n="manageProfiles">Profile verwalten</button>
+      <button onclick="if(window.app) window.app.showCloudLoginOverlay();" class="btn-manage-profiles" style="margin-top: 10px; background: rgba(0, 150, 255, 0.2); border: 1px solid rgba(0, 150, 255, 0.5);"><i class="fas fa-cloud"></i> Aether Cloud</button>
+    </div>
+  </div>
+
+  <!-- Login overlay dialog -->
+  <div id="login-overlay" class="login-overlay hidden">
+    <div class="login-box">
+      <div class="login-header">
+        <img src="assets/logo.jpg" alt="Aether" class="app-logo-img login-logo" style="width: 80px; height: 80px; border-radius: 20px; margin-bottom: 15px;">
+        <h2 style="font-size: 2.5rem; letter-spacing: 3px; font-weight: 800; margin-bottom: 5px;">AETHER</h2>
+        <p data-i18n="loginSubtitle">Geben Sie Ihre IPTV-Verbindungsdaten ein, um das Profil zu erstellen.</p>
+      </div>
+      <form id="login-form" class="login-form">
+        <div class="form-group">
+          <label for="login-profile-name" data-i18n="profileNameLabel">Name des Profils (z.B. IPTV 1, Wohnzimmer, etc.)</label>
+          <input type="text" id="login-profile-name" placeholder="Profilname" required>
+        </div>
+        <div class="form-group">
+          <label for="login-server" data-i18n="serverUrlLabel">Xtream Server URL</label>
+          <input type="url" id="login-server" placeholder="http://domain.com:8080" required>
+        </div>
+        <div class="form-group">
+          <label for="login-user" data-i18n="usernameLabel">Benutzername</label>
+          <input type="text" id="login-user" placeholder="Dein Username" required>
+        </div>
+        <div class="form-group">
+          <label for="login-pass" data-i18n="passwordLabel">Passwort</label>
+          <input type="password" id="login-pass" placeholder="Dein Passwort" required>
+        </div>
+        <div class="form-group">
+          <label for="login-proxy" data-i18n="proxyLabel">CORS Proxy Verbindung</label>
+          <select id="login-proxy">
+            <option value="direct" data-i18n="proxyDirect">Direkt (Empfohlen in Electron, da CORS deaktiviert ist)</option>
+            <option value="https://corsproxy.io/?">corsproxy.io (Bypass)</option>
+            <option value="https://api.allorigins.win/raw?url=">allorigins.win (Backup)</option>
+          </select>
+          <p class="form-tip" data-i18n="proxyTip">Da WebSecurity in der App deaktiviert ist, kannst du direkt verbinden!</p>
+        </div>
+        
+        <div id="login-error" class="login-error-text hidden">Fehlertext</div>
+        
+        <div class="login-form-buttons">
+          <button type="button" id="login-back-btn" class="btn-login-back hidden" data-i18n="back">Zurück</button>
+          <button type="submit" id="login-submit-btn" class="btn-login-submit" data-i18n="createProfile">Profil erstellen</button>
+        </div>
+        <div style="margin-top: 15px; text-align: center;">
+          <button type="button" onclick="if(window.app) window.app.showCloudLoginOverlay();" class="btn-manage-profiles" style="width: 100%; background: rgba(0, 150, 255, 0.2); border: 1px solid rgba(0, 150, 255, 0.5);"><i class="fas fa-cloud"></i> Über Aether Cloud wiederherstellen</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Sync overlay loader -->
+  <div id="sync-overlay" class="sync-overlay hidden">
+    <div class="sync-box">
+      <div class="sync-spinner"><i class="fas fa-rotate fa-spin"></i></div>
+      <h2 data-i18n="syncTitle">Erste Synchronisierung</h2>
+      <p data-i18n="syncDesc">Deine IPTV-Kanäle, VOD Filme und Serien werden heruntergeladen und im Browser-Datenbank gespeichert. Dies kann je nach Umfang einige Sekunden dauern...</p>
+      
+      <div class="sync-progress">
+        <div id="sync-fill" class="sync-fill" style="width: 0%"></div>
+      </div>
+      <div id="sync-status" class="sync-status" data-i18n="syncCheck">Verbindung prüfen...</div>
+    </div>
+  </div>
+
+  <!-- Live TV EPG Modal -->
+  <div id="live-epg-modal" class="detail-modal hidden">
+    <div class="detail-modal-content" style="max-width: 650px; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 20px 50px rgba(0,0,0,0.8);">
+      <button class="modal-close-btn" onclick="document.getElementById('live-epg-modal').classList.add('hidden')"><i class="fas fa-times"></i></button>
+      
+      <div class="detail-hero" id="live-epg-hero" style="height: 220px; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, #141414 100%); position: relative;">
+        <!-- Logo will go here -->
+      </div>
+      
+      <div class="detail-info-container" style="padding: 30px 40px; margin-top: -30px; position: relative; z-index: 2; background: linear-gradient(to bottom, transparent, #141414 20px);">
+        <h1 class="detail-title" id="live-epg-title" style="text-align: center; font-size: 28px; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 25px; text-shadow: 0 2px 10px rgba(0,0,0,0.5);">Sender Name</h1>
+        
+        <div style="display: flex; justify-content: center; margin-bottom: 30px;">
+          <button id="live-epg-play-btn" class="btn-play" style="width: 100%; max-width: 300px; justify-content: center; font-size: 16px; padding: 12px 24px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);"><i class="fas fa-play"></i> <span data-i18n="playLive" style="margin-left: 5px;">Live Einschalten</span></button>
+        </div>
+        
+        <div class="detail-metadata" style="justify-content: center; margin-bottom: 25px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 15px;">
+          <span class="match-score" style="font-size: 15px; letter-spacing: 1px; text-transform: uppercase;" data-i18n="epgGuide">Programmzeitschrift</span>
+        </div>
+        
+        <div id="live-epg-timeline" class="epg-timeline-container" style="display: flex; flex-direction: column; gap: 12px;">
+          <!-- EPG Items -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="update-notification" class="hidden" style="position: fixed; bottom: 20px; right: 20px; background: rgba(0,0,0,0.9); border: 1px solid var(--color-primary); border-radius: 8px; padding: 20px; z-index: 9999; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(10px); min-width: 300px; color: white;">
+    <h3 style="margin-top: 0; color: var(--color-primary);"><i class="fas fa-arrow-alt-circle-up"></i> Update verfügbar!</h3>
+    <p id="update-message" style="font-size: 14px; margin-bottom: 15px;"></p>
+    <div style="display: flex; gap: 10px;">
+      <button id="btn-update-action" class="btn-primary" style="flex: 1;">Herunterladen</button>
+      <button id="btn-update-dismiss" class="btn-secondary" style="background: rgba(255,255,255,0.1);">Später</button>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module" src="js/cloud.js"></script>
+
+  <!-- Local Script References -->
+  <script src="js/i18n.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+
+  <!-- PWA Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js')
+          .then(reg => console.log('Service Worker registered', reg))
+          .catch(err => console.error('Service Worker registration failed', err));
+      });
+    }
+  </script>
+</body>
+</html>

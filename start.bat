@@ -1,0 +1,3 @@
+@echo off
+echo Starte Aether Streaming im Entwickler-Modus...
+npm start
