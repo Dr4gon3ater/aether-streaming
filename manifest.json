@@ -1,0 +1,17 @@
+{
+  "name": "Aether Streaming",
+  "short_name": "Aether",
+  "description": "Premium IPTV Player",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#141414",
+  "theme_color": "#141414",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "assets/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg"
+    }
+  ]
+}
