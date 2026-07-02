@@ -197,6 +197,29 @@ class NetflixPlayer {
     });
 
     this.video.addEventListener('ended', () => {
+      const realTime = this.isProxyActive ? (this.proxyTimeOffset + this.video.currentTime) : this.video.currentTime;
+      const realDuration = this.originalDuration || this.video.duration;
+      
+      // Auto-reconnect if proxy stream dies prematurely (> 20s left)
+      if (this.isProxyActive && realDuration > 0 && (realDuration - realTime) > 20) {
+        console.log('[Player] Premature end detected. Auto-reconnecting...');
+        this.proxyTimeOffset = realTime;
+        this.playerContainer.classList.add('loading');
+        
+        this.video.onerror = null;
+        this.video.oncanplay = null;
+        
+        const streamUrl = window.api.getStreamUrl(this.currentStream.id, this.currentStream.type);
+        this.video.src = `${streamUrl}&start=${Math.floor(this.proxyTimeOffset)}`;
+        
+        this.video.oncanplay = () => {
+          this.playerContainer.classList.remove('loading');
+          this.video.play().catch(e => console.warn(e));
+        };
+        this.video.onerror = () => { this.handlePlaybackError(); };
+        return;
+      }
+
       if (this.currentStream && this.nextEpisodeData && !this.autoplayTriggered && (this.currentStream.isSeries || this.nextEpisodeData.isMovieSequel)) {
         this.autoplayTriggered = true;
         this.playNextEpisodeFromAutoplay();
@@ -1089,7 +1112,10 @@ class NetflixPlayer {
       <h3>Fehler bei der Wiedergabe</h3>
       <p>Dieser Stream konnte nicht dekodiert werden. Möglicherweise nutzt er AC3/Dolby-Audio oder H.265-Video, das in Electron nicht direkt unterstützt wird.</p>
       <div class="player-error-options">
-        <a href="${window.api.getStreamUrl(this.currentStream.id, this.currentStream.type)}" target="_blank" class="error-btn-primary">
+        <button onclick="window.player.reconnectStream()" class="error-btn-primary" style="margin-right:10px;">
+          <i class="fas fa-sync-alt"></i> Neu verbinden
+        </button>
+        <a href="${window.api.getStreamUrl(this.currentStream.id, this.currentStream.type)}" target="_blank" class="error-btn-primary" style="margin-right:10px;">
           <i class="fas fa-external-link-alt"></i> Im Browser-Tab öffnen
         </a>
         <button onclick="window.player.copyStreamUrl()" class="error-btn-secondary">
@@ -1097,6 +1123,33 @@ class NetflixPlayer {
         </button>
       </div>
     `;
+  }
+
+  reconnectStream() {
+    if (!this.currentStream) return;
+    const realTime = this.isProxyActive ? (this.proxyTimeOffset + this.video.currentTime) : this.video.currentTime;
+    console.log('[Player] Manual reconnect at', realTime);
+    this.proxyTimeOffset = realTime;
+    this.playerContainer.classList.remove('error');
+    this.playerContainer.classList.add('loading');
+    
+    this.video.onerror = null;
+    this.video.oncanplay = null;
+    
+    const streamUrl = window.api.getStreamUrl(this.currentStream.id, this.currentStream.type);
+    if (this.isProxyActive) {
+      this.video.src = `${streamUrl}&start=${Math.floor(this.proxyTimeOffset)}`;
+    } else {
+      this.video.src = streamUrl;
+    }
+    this.video.load();
+    
+    this.video.oncanplay = () => {
+      this.playerContainer.classList.remove('loading');
+      if (!this.isProxyActive && this.proxyTimeOffset > 0) this.video.currentTime = this.proxyTimeOffset;
+      this.video.play().catch(e => console.warn(e));
+    };
+    this.video.onerror = () => { this.handlePlaybackError(); };
   }
 
   copyStreamUrl() {

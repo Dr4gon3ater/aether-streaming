@@ -312,6 +312,7 @@ class IPTVNetflixDB {
   }
 
   deleteProgress(id) {
+    if (window.cloudSync) window.cloudSync.removeProgress(this.activeProfileId, String(id));
     return this.delete('progress', String(id));
   }
 

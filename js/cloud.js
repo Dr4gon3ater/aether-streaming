@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyACl8TJOP87yHhawZYLebjBsCuVGp6z6bU",
@@ -86,6 +86,12 @@ class CloudSync {
     await setDoc(docRef, progressData, { merge: true }).catch(e => console.error("Cloud Sync progress error", e));
   }
 
+  async removeProgress(profileId, progressId) {
+    if (!this.user || this.isPulling) return;
+    const docRef = doc(this.db, "users", this.user.uid, "profiles", String(profileId), "progress", String(progressId));
+    await deleteDoc(docRef).catch(e => console.error("Cloud Sync remove progress error", e));
+  }
+
   async pushFavorite(profileId, type, itemData) {
     if (!this.user || this.isPulling) return;
     const itemId = itemData.id || itemData.stream_id || itemData.series_id;
@@ -96,12 +102,9 @@ class CloudSync {
   }
 
   async removeFavorite(profileId, id) {
-    // Actually we should delete it, but for simplicity we can mark it deleted or implement deleteDoc.
     if (!this.user) return;
-    import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js").then(({deleteDoc}) => {
-      const docRef = doc(this.db, "users", this.user.uid, "profiles", String(profileId), "favorites", String(id));
-      deleteDoc(docRef).catch(e => console.error("Cloud Sync favorite remove error", e));
-    });
+    const docRef = doc(this.db, "users", this.user.uid, "profiles", String(profileId), "favorites", String(id));
+    await deleteDoc(docRef).catch(e => console.error("Cloud Sync favorite remove error", e));
   }
 
   async pushAllLocalDataToCloud(localDbInstance, progressCallback) {

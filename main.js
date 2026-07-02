@@ -150,7 +150,9 @@ window.addEventListener('message',function(e){
       '-c:v', 'copy',
       '-c:a', 'aac',
       '-b:a', '192k',
-      '-avoid_negative_ts', 'make_zero',
+      '-af', 'aresample=async=1',
+      '-copyts',
+      '-start_at_zero',
       '-f', 'mp4',
       '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
       'pipe:1'
